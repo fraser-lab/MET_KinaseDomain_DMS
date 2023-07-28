@@ -1,5 +1,6 @@
 # MET_ensemble_alignment_2.pml
 # By G.Estevam @UCSF
+# Generates a structural ensemble of MET crystal structures from the PDB
 # This code opens MET kinase structures, aligns them to nlobe residues, measures their distance, and retrieves additional strcture info
 
 #### pseudocode:
@@ -44,7 +45,7 @@ set ray_shadows,0
 
 # align structures
 # the goal here is to align all structres to the nlobe sequence
-# here the program is aligning each structure individually to the specified nlobe sequence
+# here the code is aligning each structure individually to the specified nlobe sequence
 # things that are important to consider are that we only want to align the same chain (i.e chain A)- some structures contain multiple chains (eventually I want to align these too)
 # the approach to do this here is by running a loop that porvides inputs on the command line
 
@@ -102,7 +103,7 @@ i=0
 
 while i<100: #len(pdbs):
   #create a conditional statement in case structure is missing --> avoid error for 'NoneType' object
-  b = resi_1066_xyz_dictionary.get(pdbs[i])                                     # assigns specific coordinate array for residue to variable
+  b = resi_1066_xyz_dictionary.get(pdbs[i]) # assigns specific coordinate array for residue to variable
   c = resi_1129_xyz_dictionary.get(pdbs[i])
   d = resi_1062_xyz_dictionary.get(pdbs[i])
   e = resi_1125_xyz_dictionary.get(pdbs[i])
@@ -141,7 +142,7 @@ while i<100: #len(pdbs):
   else:
     i = i+1
 
-with open('JM_MET_aligned_strutures_2.csv', 'w', newline='') as file:
+with open('MET_ensemblle_JM_C_helix_resi_dist.csv', 'w', newline='') as file:
   writer = csv.writer(file)
   writer.writerow(['PDB','1062 to 1125 distance', '1066 to 1129 distance', '1058 to 1121 distance'])
   writer.writerows(L)
