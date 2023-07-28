@@ -1,3 +1,5 @@
+# Code by: Christian Macdonald 
+
 #Color scheme:
   #D55E00 - Vermillion - deletions
   #56B4E9 - Sky blue - insertions
