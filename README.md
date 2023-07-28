@@ -3,7 +3,7 @@
 Source code and data for the analysis and figure generation in Estevam et al., 2023. 
 
 Primary analysis of fitness scores, heatmaps, and PDB mapping can be found in: 
-  Met_V2.Rmd 
+  Met_V2.Rmd
   MET_DMS_analysis_plots.R 
 
 ## Fitness scores 
