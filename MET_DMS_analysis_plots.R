@@ -60,7 +60,7 @@ met_scores_ = met_scores
 #write.csv(met_scores, ".../met_scores.csv", row.names=FALSE)
 
 
-### open data file as data frame for all raw inhibitor scores 
+### open data file as data frame 
 #ex14_scores_<- read.csv("ex14_scores.csv")
 #met_scores_<- read.csv("met_scores.csv")
 
