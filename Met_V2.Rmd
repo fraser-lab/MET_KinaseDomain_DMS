@@ -1,0 +1,1471 @@
+---
+title: "Met DMS analysis"
+output: html_notebook
+---
+
+```{r}
+library(ggplot2)
+library(gglorenz)
+library(readr)
+library(stringr)
+library(tidyverse)
+library(dplyr)
+library(ggridges)
+library(ggbraid)
+library(tidyquant)
+library(bio3d)
+source("dms_analysis_utilities.R")
+library(scales)
+library(colorspace)
+library(ggpubr)
+library(rstatix)
+library(cowplot)
+```
+
+Read in the Met DMS output
+
+```{r}
+
+# Met Enrich2 score files
+met_scores_file = "../data/Enrich2/Met/tsv/TPR_MET_enrich2_config_exp/main_identifiers_scores.tsv"
+
+met_variantscore_colnames <- c("hgvs", "IL3_SE", "IL3_epsilon", "IL3_score",
+                               "IL3_withdrawal_SE", "IL3_withdrawal_epsilon", "IL3_withdrawal_score")
+
+met_variantscore_coltypes <- c("character", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric")
+
+met_scores <- read_delim(met_scores_file, col_names = met_variantscore_colnames, skip=3)
+met_scores <- process_hgvs_df(met_scores)
+met_scores$is.wt = met_scores$mutation_type == "S"
+
+met_wt_fasta = "Met_wt.fasta"
+
+met_wt_fasta_con=file(met_wt_fasta, open="r")
+met_wt_sequence = readLines(met_wt_fasta_con)[2]
+close(met_wt_fasta_con)
+
+# Adjust position to correspond with actual numbering
+met_scores <- met_scores %>% mutate(pos = pos+1058)
+
+#filters out stops from summarizing 
+met_avg_scores <- met_scores %>% filter(mutation_type != "N" & mutation_type != "S") %>% group_by(pos) %>% summarise(avg_IL3 = mean(IL3_score, na.rm=TRUE),avg_IL3_withdrawal = mean(IL3_withdrawal_score, na.rm=TRUE))
+
+met_var_scores <- met_scores %>% filter(mutation_type != "N" & mutation_type != "S") %>% group_by(pos) %>% summarise(var_IL3 = var(IL3_score, na.rm=TRUE),var_IL3_withdrawal = var(IL3_withdrawal_score, na.rm=TRUE))
+
+met_max_scores <- met_scores %>% filter(mutation_type != "N" & mutation_type != "S") %>%group_by(pos) %>% summarise(max_IL3 = max(IL3_score, na.rm=TRUE),max_IL3_withdrawal = max(IL3_withdrawal_score, na.rm=TRUE))
+
+```
+
+Read in exon14 Met data
+
+```{r}
+# Met Enrich2 score files
+ex14_scores_file = "../data/Enrich2/Ex14/tsv/TPR_MET_enrich2_ex_config_exp/main_identifiers_scores.tsv"
+
+met_variantscore_colnames <- c("hgvs", "IL3_SE", "IL3_epsilon", "IL3_score",
+                               "IL3_withdrawal_SE", "IL3_withdrawal_epsilon", "IL3_withdrawal_score")
+
+met_variantscore_coltypes <- c("character", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric")
+
+ex14_scores <- read_delim(ex14_scores_file, col_names = met_variantscore_colnames, skip=3)
+ex14_scores <- process_hgvs_df(ex14_scores)
+ex14_scores$is.wt = ex14_scores$mutation_type == "S"
+
+met_wt_fasta = "Met_wt.fasta"
+
+met_wt_fasta_con=file(met_wt_fasta, open="r")
+met_wt_sequence = readLines(met_wt_fasta_con)[2]
+close(met_wt_fasta_con)
+
+# Adjust position to correspond with actual numbering
+ex14_scores <- ex14_scores %>% mutate(pos = pos+1058)
+
+ex14_avg_scores <- ex14_scores %>%  filter(mutation_type != "N" & mutation_type != "S") %>%group_by(pos) %>% summarise(avg_IL3 = mean(IL3_score, na.rm=TRUE),avg_IL3_withdrawal = mean(IL3_withdrawal_score, na.rm=TRUE))
+
+ex14_var_scores <- ex14_scores %>% filter(mutation_type != "N" & mutation_type != "S") %>% group_by(pos) %>% summarise(var_IL3 = var(IL3_score, na.rm=TRUE),var_IL3_withdrawal = var(IL3_withdrawal_score, na.rm=TRUE))
+
+ex14_max_scores <- ex14_scores %>%  filter(mutation_type != "N" & mutation_type != "S") %>% group_by(pos) %>% summarise(max_IL3 = max(IL3_score, na.rm=TRUE),max_IL3_withdrawal = max(IL3_withdrawal_score, na.rm=TRUE))
+
+```
+
+Plot heatmap - IL3 scores
+
+```{r}
+order <- c('X','H', 'K', 'R', 'D', 'E',
+          'C','M','N','Q','S','T','A','I','L','V','W','F',
+          'Y','G','P')
+
+variant_names <- c('Stop','H', 'K', 'R', 'D', 'E',
+          'C','M','N','Q','S','T','A','I','L','V','W','F',
+          'Y','G','P')
+
+met_wt_1 = str_split(substr(met_wt_sequence, 1, 100), '')[[1]]
+met_wt_2 = str_split(substr(met_wt_sequence, 101, 200), '')[[1]]
+met_wt_3 = str_split(substr(met_wt_sequence, 201, 287), '')[[1]]
+
+Met_row1 = ggplot(data = met_scores %>% filter(pos %in% c(1059:1158)),
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill = IL3_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1059, 1158, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1059, 1158),
+                      labels = met_wt_1,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="none"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_row2 = ggplot(data = met_scores %>% filter(pos %in% c(1159:1258)), 
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill = IL3_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1159, 1258, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1159, 1258),
+                      labels = met_wt_2,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="none"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_row3 = ggplot(data = met_scores %>% filter(pos %in% c(1259:1345)), 
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill = IL3_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1259,1345, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1259,1345),
+                      labels = met_wt_3,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="none"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_DMS = ggarrange(Met_row1, Met_row2, Met_row3,
+                        nrow = 3, ncol = 1)
+
+ggsave("Plots/Heatmap_IL3_Met.pdf", height = 7, width = 8.5, Met_DMS)
+ggsave("Plots/Heatmap_IL3_Met.png", height = 7, width = 8.5, Met_DMS)
+```
+
+
+Plot IL3 withdrawal
+```{r}
+order <- c('X','H', 'K', 'R', 'D', 'E',
+          'C','M','N','Q','S','T','A','I','L','V','W','F',
+          'Y','G','P')
+
+variant_names <- c('Stop','H', 'K', 'R', 'D', 'E',
+          'C','M','N','Q','S','T','A','I','L','V','W','F',
+          'Y','G','P')
+
+met_wt_1 = str_split(substr(met_wt_sequence, 1, 100), '')[[1]]
+met_wt_2 = str_split(substr(met_wt_sequence, 101, 200), '')[[1]]
+met_wt_3 = str_split(substr(met_wt_sequence, 201, 287), '')[[1]]
+
+Met_row1 = ggplot(data = met_scores %>%filter(pos %in% c(1059:1158)),
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill =  IL3_withdrawal_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1059, 1158, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1059, 1158),
+                      labels = met_wt_1,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="none"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_row2 = ggplot(data = met_scores %>% filter(pos %in% c(1159:1258)), 
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill =   IL3_withdrawal_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1159, 1258, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1159, 1258),
+                      labels = met_wt_2,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="none"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_row3 = ggplot(data = met_scores %>% filter(pos %in% c(1259:1345)), 
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill = IL3_withdrawal_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1259,1345, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1259,1345),
+                      labels = met_wt_3,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="right"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_DMS = ggarrange(Met_row1, Met_row2, Met_row3,
+                        nrow = 3, ncol = 1)
+
+ggsave("Plots/Heatmap_IL3_withdrawal_Met.pdf", height = 7, width = 8.5, Met_DMS)
+ggsave("Plots/Heatmap_IL3_withdrawal_Met.png", height = 7, width = 8.5, Met_DMS)
+
+
+
+
+######################### 2 row 
+
+order <- c('X','H', 'K', 'R', 'D', 'E',
+          'C','M','N','Q','S','T','A','I','L','V','W','F',
+          'Y','G','P')
+
+variant_names <- c('Stop','H', 'K', 'R', 'D', 'E',
+          'C','M','N','Q','S','T','A','I','L','V','W','F',
+          'Y','G','P')
+
+met_wt_1 = str_split(substr(met_wt_sequence, 1, 144), '')[[1]]
+met_wt_2 = str_split(substr(met_wt_sequence, 145, 287), '')[[1]]
+
+Met_row1 = ggplot(data = met_scores %>%filter(pos %in% c(1059:1202)),
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill =  IL3_withdrawal_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1059,1202, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1059,1202),
+                      labels = met_wt_1,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="none"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_row2 = ggplot(data = met_scores %>% filter(pos %in% c(1203:1345)), 
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill =   IL3_withdrawal_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1203,1345, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1203,1345),
+                      labels = met_wt_2,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="none"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_DMS = ggarrange(Met_row1,Met_row2,nrow = 2, ncol = 1)
+
+ggsave("Plots/Heatmap_IL3_withdrawal_Met_2.pdf", height = 7, width = 8.5, Met_DMS)
+ggsave("Plots/Heatmap_IL3_withdrawal_Met_2.pdf", height = 7, width = 8.5, Met_DMS)
+
+######### 2 row
+
+
+order <- c('X','H', 'K', 'R', 'D', 'E',
+          'C','M','N','Q','S','T','A','I','L','V','W','F',
+          'Y','G','P')
+
+variant_names <- c('Stop','H', 'K', 'R', 'D', 'E',
+          'C','M','N','Q','S','T','A','I','L','V','W','F',
+          'Y','G','P')
+
+met_wt_1 = str_split(substr(met_wt_sequence, 1, 144), '')[[1]]
+met_wt_2 = str_split(substr(met_wt_sequence, 145, 287), '')[[1]]
+
+Met_row1 = ggplot(data = met_scores %>%filter(pos %in% c(1059:1202)),
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill =  IL3_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1059,1202, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1059,1202),
+                      labels = met_wt_1,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="none"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_row2 = ggplot(data = met_scores %>% filter(pos %in% c(1203:1345)), 
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill =   IL3_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1203,1345, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1203,1345),
+                      labels = met_wt_2,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="none"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_DMS = ggarrange(Met_row1,Met_row2,nrow = 2, ncol = 1)
+
+ggsave("Plots/Heatmap_IL3_met_2.pdf", height = 7, width = 8.5, Met_DMS)
+ggsave("Plots/Heatmap_IL3_met_2.pdf", height = 7, width = 8.5, Met_DMS)
+
+
+
+
+order <- c('X','H', 'K', 'R', 'D', 'E',
+          'C','M','N','Q','S','T','A','I','L','V','W','F',
+          'Y','G','P')
+
+variant_names <- c('Stop','H', 'K', 'R', 'D', 'E',
+          'C','M','N','Q','S','T','A','I','L','V','W','F',
+          'Y','G','P')
+
+met_wt_1 = str_split(substr(met_wt_sequence, 1, 144), '')[[1]]
+met_wt_2 = str_split(substr(met_wt_sequence, 145, 287), '')[[1]]
+
+Met_row1 = ggplot(data = met_scores %>%filter(pos %in% c(1059:1202)),
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill =  IL3_withdrawal_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1059,1202, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1059,1202),
+                      labels = met_wt_1,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="none"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_row2 = ggplot(data = met_scores %>% filter(pos %in% c(1203:1345)), 
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill =   IL3_withdrawal_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1203,1345, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1203,1345),
+                      labels = met_wt_2,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="none"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_DMS = ggarrange(Met_row1,Met_row2,nrow = 2, ncol = 1)
+
+ggsave("Plots/Heatmap_IL3_withdrawal_met_2.pdf", height = 7, width = 8.5, Met_DMS)
+ggsave("Plots/Heatmap_IL3_withdrawal_met_2.pdf", height = 7, width = 8.5, Met_DMS)
+
+
+```
+
+Exon 14 heatmaps.
+
+Plot heatmap - exon 14, IL3 scores
+
+```{r}
+order <- c('X','H', 'K', 'R', 'D', 'E',
+          'C','M','N','Q','S','T','A','I','L','V','W','F',
+          'Y','G','P')
+
+variant_names <- c('Stop','H', 'K', 'R', 'D', 'E',
+          'C','M','N','Q','S','T','A','I','L','V','W','F',
+          'Y','G','P')
+
+met_wt_1 = str_split(substr(met_wt_sequence, 1, 100), '')[[1]]
+met_wt_2 = str_split(substr(met_wt_sequence, 101, 200), '')[[1]]
+met_wt_3 = str_split(substr(met_wt_sequence, 201, 287), '')[[1]]
+
+Met_row1 = ggplot(data = ex14_scores %>% filter(pos %in% c(1059:1158)),
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill =  IL3_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1059, 1158, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1059, 1158),
+                      labels = met_wt_1,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="none"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_row2 = ggplot(data = ex14_scores %>% filter(pos %in% c(1159:1258)), 
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill =   IL3_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1159, 1258, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1159, 1258),
+                      labels = met_wt_2,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="none"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_row3 = ggplot(data = ex14_scores %>% filter(pos %in% c(1259:1345)), 
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill = IL3_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1259,1345, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1259,1345),
+                      labels = met_wt_3,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="none"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_DMS = ggarrange(Met_row1, Met_row2, Met_row3,
+                        nrow = 3, ncol = 1)
+
+ggsave("Plots/Heatmap_IL3_ex14.pdf", height = 7, width = 8.5, Met_DMS)
+ggsave("Plots/Heatmap_IL3_ex14.png", height = 7, width = 8.5, Met_DMS)
+######### 2 row
+
+
+order <- c('X','H', 'K', 'R', 'D', 'E',
+          'C','M','N','Q','S','T','A','I','L','V','W','F',
+          'Y','G','P')
+
+variant_names <- c('Stop','H', 'K', 'R', 'D', 'E',
+          'C','M','N','Q','S','T','A','I','L','V','W','F',
+          'Y','G','P')
+
+met_wt_1 = str_split(substr(met_wt_sequence, 1, 144), '')[[1]]
+met_wt_2 = str_split(substr(met_wt_sequence, 145, 287), '')[[1]]
+
+Met_row1 = ggplot(data = ex14_scores %>%filter(pos %in% c(1059:1202)),
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill =  IL3_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1059,1202, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1059,1202),
+                      labels = met_wt_1,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="none"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_row2 = ggplot(data = ex14_scores %>% filter(pos %in% c(1203:1345)), 
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill =   IL3_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1203,1345, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1203,1345),
+                      labels = met_wt_2,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="none"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_DMS = ggarrange(Met_row1,Met_row2,nrow = 2, ncol = 1)
+
+ggsave("Plots/Heatmap_IL3_ex14_2.pdf", height = 7, width = 8.5, Met_DMS)
+ggsave("Plots/Heatmap_IL3_ex14_2.pdf", height = 7, width = 8.5, Met_DMS)
+
+
+```
+
+
+
+Plot IL3 withdrawal, exon 14
+```{r}
+order <- c('X','H', 'K', 'R', 'D', 'E',
+          'C','M','N','Q','S','T','A','I','L','V','W','F',
+          'Y','G','P')
+
+variant_names <- c('Stop','H', 'K', 'R', 'D', 'E',
+          'C','M','N','Q','S','T','A','I','L','V','W','F',
+          'Y','G','P')
+
+met_wt_1 = str_split(substr(met_wt_sequence, 1, 100), '')[[1]]
+met_wt_2 = str_split(substr(met_wt_sequence, 101, 200), '')[[1]]
+met_wt_3 = str_split(substr(met_wt_sequence, 201, 287), '')[[1]]
+
+Met_row1 = ggplot(data = ex14_scores %>% filter(pos %in% c(1059:1158)),
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill =  IL3_withdrawal_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1059, 1158, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1059, 1158),
+                      labels = met_wt_1,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="none"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_row2 = ggplot(data = ex14_scores %>% filter(pos %in% c(1159:1258)), 
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill =   IL3_withdrawal_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1159, 1258, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1159, 1258),
+                      labels = met_wt_2,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="none"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_row3 = ggplot(data = ex14_scores %>% filter(pos %in% c(1259:1345)), 
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill = IL3_withdrawal_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1259,1345, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1259,1345),
+                      labels = met_wt_3,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="right"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_DMS = ggarrange(Met_row1, Met_row2, Met_row3,
+                        nrow = 3, ncol = 1)
+
+ggsave("Plots/Heatmap_IL3_withdrawal_ex14.pdf", height = 7, width = 8.5, Met_DMS)
+ggsave("Plots/Heatmap_IL3_withdrawal_ex14.png", height = 7, width = 8.5, Met_DMS)
+
+
+######### 2 row
+
+
+order <- c('X','H', 'K', 'R', 'D', 'E',
+          'C','M','N','Q','S','T','A','I','L','V','W','F',
+          'Y','G','P')
+
+variant_names <- c('Stop','H', 'K', 'R', 'D', 'E',
+          'C','M','N','Q','S','T','A','I','L','V','W','F',
+          'Y','G','P')
+
+met_wt_1 = str_split(substr(met_wt_sequence, 1, 144), '')[[1]]
+met_wt_2 = str_split(substr(met_wt_sequence, 145, 287), '')[[1]]
+
+Met_row1 = ggplot(data = ex14_scores %>%filter(pos %in% c(1059:1202)),
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill =  IL3_withdrawal_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1059,1202, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1059,1202),
+                      labels = met_wt_1,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="none"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_row2 = ggplot(data = ex14_scores %>% filter(pos %in% c(1203:1345)), 
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill =   IL3_withdrawal_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1203,1345, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1203,1345),
+                      labels = met_wt_2,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="none"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_DMS = ggarrange(Met_row1,Met_row2,nrow = 2, ncol = 1)
+
+ggsave("Plots/Heatmap_IL3_withdrawal_ex14_2.pdf", height = 7, width = 8.5, Met_DMS)
+ggsave("Plots/Heatmap_IL3_withdrawal_ex14_2.pdf", height = 7, width = 8.5, Met_DMS)
+
+```{r}
+
+######### 2 row
+
+
+order <- c('X','H', 'K', 'R', 'D', 'E',
+          'C','M','N','Q','S','T','A','I','L','V','W','F',
+          'Y','G','P')
+
+variant_names <- c('Stop','H', 'K', 'R', 'D', 'E',
+          'C','M','N','Q','S','T','A','I','L','V','W','F',
+          'Y','G','P')
+
+met_wt_1 = str_split(substr(met_wt_sequence, 1, 144), '')[[1]]
+met_wt_2 = str_split(substr(met_wt_sequence, 145, 287), '')[[1]]
+
+Met_row1 = ggplot(data = ex14_scores %>%filter(pos %in% c(1059:1202)),
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill =  IL3_withdrawal_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1059,1202, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1059,1202),
+                      labels = met_wt_1,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="none"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_row2 = ggplot(data = ex14_scores %>% filter(pos %in% c(1203:1345)), 
+                      aes(x = pos, y = factor(variants, level = order, labels = variant_names), fill =   IL3_withdrawal_score )) +
+  geom_tile(aes(color = as.factor(is.wt)), size = 0.2) +
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0,l1=0.2, l3 = 0.2, p1=0.9, p3 = .4, p4 = 0.9,rev=FALSE, na.value = 'lightyellow',limits=c(-10,6)) + 
+  scale_color_manual(values = c(NA,'green')) +
+  scale_x_continuous(breaks = seq(1203,1345, by = 5),
+                     expand = c(0,0),
+                     sec.axis = sec_axis(
+                      trans = ~.,
+                      name = "Sequence",
+                      breaks = seq(1203,1345),
+                      labels = met_wt_2,
+                      guide = derive()
+                    )) +
+  coord_fixed(ratio = 1) +
+  theme(
+    panel.background = element_rect(fill = "white",
+                                    colour = "white",
+                                    size = 0.5, linetype = "solid"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "lightgray"), 
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 4),
+    axis.text = element_text(size = 4),
+    axis.text.x.top = element_text(angle = 0, hjust = 0.5, family = "mono"),
+    axis.ticks = element_blank(),
+    legend.position="none"
+  ) +
+  labs(y = "Mutation", x = "Position")
+
+Met_DMS = ggarrange(Met_row1,Met_row2,nrow = 2, ncol = 1)
+
+ggsave("Plots/Heatmap_IL3_withdrawal_ex14_2.pdf", height = 7, width = 8.5, Met_DMS)
+ggsave("Plots/Heatmap_IL3_withdrawal_ex14_2.pdf", height = 7, width = 8.5, Met_DMS)
+
+```
+
+Plot average, variance DFEs for setting limits for structure mapping
+```{r}
+plot <- ggplot(met_avg_scores) +
+  geom_density(aes(x = avg_IL3), bw = "nrd", kernel='gaussian', size=1) +
+  xlab("Average Enrich2 score") + 
+  ylab("Density") + 
+  geom_vline(xintercept = 0, linetype="dotted") +
+  theme_classic() + 
+  scale_color_manual(values=cbp1)
+
+ggsave("Plots/DFE_kernel_avg_IL3_Met.pdf", height = 4, width = 5)
+ggsave("Plots/DFE_kernel_avg_IL3_Met.png", height = 4, width = 5)
+
+plot <- ggplot(met_avg_scores) +
+  geom_density(aes(x = avg_IL3_withdrawal), bw = "nrd", kernel='gaussian', size=1) +
+  xlab("Average Enrich2 score") + 
+  ylab("Density") + 
+  geom_vline(xintercept = 0, linetype="dotted") +
+  theme_classic() + 
+  scale_color_manual(values=cbp1)
+
+ggsave("Plots/DFE_kernel_avg_IL3_withdrawal_Met.pdf", height = 4, width = 5)
+ggsave("Plots/DFE_kernel_avg_IL3_withdrawal_Met.png", height = 4, width = 5)
+
+plot <- ggplot(met_var_scores) +
+  geom_density(aes(x = var_IL3), bw = "nrd", kernel='gaussian', size=1) +
+  xlab("Average Enrich2 score") + 
+  ylab("Density") + 
+  geom_vline(xintercept = 0, linetype="dotted") +
+  theme_classic() + 
+  scale_color_manual(values=cbp1)
+
+ggsave("Plots/DFE_kernel_var_IL3_Met.pdf", height = 4, width = 5)
+ggsave("Plots/DFE_kernel_var_IL3_Met.png", height = 4, width = 5)
+
+plot <- ggplot(met_var_scores) +
+  geom_density(aes(x = var_IL3_withdrawal), bw = "nrd", kernel='gaussian', size=1) +
+  xlab("Average Enrich2 score") + 
+  ylab("Density") + 
+  geom_vline(xintercept = 0, linetype="dotted") +
+  theme_classic() + 
+  scale_color_manual(values=cbp1)
+
+ggsave("Plots/DFE_kernel_var_IL3_withdrawal_Met.pdf", height = 4, width = 5)
+ggsave("Plots/DFE_kernel_var_IL3_withdrawal_Met.png", height = 4, width = 5)
+```
+
+Plot overall DFEs: kernel smoothing
+```{r}
+plot <- ggplot(met_scores %>% filter(mutation_type != "X")) +
+  geom_density(aes(x = IL3_score, color=factor(mutation_type, level=c("M", "S", "N"))), bw = "nrd", kernel='gaussian', size=1) +
+  xlab("Enrich2 score") + 
+  ylab("Density") + 
+  geom_vline(xintercept = 0, linetype="dotted") +
+  theme_classic() + 
+  scale_color_manual(values=cbp1) +
+  labs(color = "Mutation type")
+
+ggsave("Plots/DFE_kernel_IL3_Met.pdf", height = 4, width = 5)
+ggsave("Plots/DFE_kernel_IL3_Met.png", height = 4, width = 5)
+
+plot <- ggplot(met_scores %>% filter(mutation_type != "X")) +
+  geom_density(aes(x = IL3_withdrawal_score, color=factor(mutation_type, level=c("M", "S", "N"))), bw = "nrd", kernel='gaussian', size=1) +
+  xlab("Enrich2 score") + 
+  ylab("Density") + 
+  geom_vline(xintercept = 0, linetype="dotted") +
+  theme_classic() + 
+  scale_color_manual(values=cbp1) +
+  labs(color = "Mutation type")
+
+ggsave("Plots/DFE_kernel_IL3_withdrawal_Met.pdf", height = 4, width = 5)
+ggsave("Plots/DFE_kernel_IL3_withdrawal_Met.png", height = 4, width = 5)
+```
+
+Plot DFEs: histograms
+```{r}
+plot <- ggplot(met_scores %>% filter(mutation_type != "X")) +
+  geom_histogram(aes(x = IL3_score, fill=factor(mutation_type, level=c("M", "S", "N"))), binwidth = 0.2 ) +
+  xlab("Enrich2 score") + 
+  ylab("Density") + 
+  geom_vline(xintercept = 0, linetype="dotted") +
+  theme_classic() + 
+  scale_color_manual(values=cbp1) +
+  labs(color = "Mutation type")
+
+ggsave("Plots/DFE_hist_IL3_Met.pdf", height = 4, width = 5)
+ggsave("Plots/DFE_hist_IL3_Met.png", height = 4, width = 5)
+
+plot <- ggplot(met_scores %>% filter(mutation_type != "X")) +
+  geom_histogram(aes(x = IL3_withdrawal_score, fill=factor(mutation_type, level=c("M", "S", "N"))), binwidth = 0.2 ) +
+  xlab("Enrich2 score") + 
+  ylab("Density") + 
+  geom_vline(xintercept = 0, linetype="dotted") +
+  theme_classic() + 
+  scale_color_manual(values=cbp1) +
+  labs(color = "Mutation type")
+
+ggsave("Plots/DFE_hist_IL3_withdrawal_Met.pdf", height = 4, width = 5)
+ggsave("Plots/DFE_hist_IL3_withdrawal_Met.png", height = 4, width = 5)
+```
+
+Plot DFEs: histograms, no mutants
+
+```{r}
+plot1 <- ggplot(met_scores %>% filter(mutation_type != "X" & mutation_type !="M" & mutation_type != "N")) +
+  geom_histogram(aes(x = IL3_score), binwidth = 0.5)+
+  xlab("Enrich2 score") + 
+  ylab("Density") + 
+  xlim(-10,10)+
+  geom_vline(xintercept = 0, linetype="dotted") +
+  theme_classic() + 
+  scale_color_manual(values=cbp1) +
+  ggtitle("Synonymous IL3")+
+  labs(color = "Mutation type")
+plot2 <- ggplot(met_scores %>% filter(mutation_type != "X" & mutation_type !="S" & mutation_type != "N")) +
+  geom_histogram(aes(x = IL3_score), binwidth = 0.5) +
+  xlab("Enrich2 score") + 
+  ylab("Density") + 
+  xlim(-10,10)+
+  geom_vline(xintercept = 0, linetype="dotted") +
+  theme_classic() + 
+  scale_color_manual(values=cbp1) +
+  ggtitle("Missense IL3")+
+  labs(color = "Mutation type")
+plot3 <- ggplot(met_scores %>% filter(mutation_type != "X" & mutation_type !="S" & mutation_type != "M")) +
+  geom_histogram(aes(x = IL3_score), binwidth = 0.5) +
+  xlab("Enrich2 score") + 
+  ylab("Density") + 
+  xlim(-10,10)+
+  geom_vline(xintercept = 0, linetype="dotted") +
+  theme_classic() + 
+  scale_color_manual(values=cbp1) +
+  ggtitle("Nonsense IL3")+
+  labs(color = "Mutation type")
+
+plot_grid(plot1,plot2,plot3, ncol=1, nrow=3)
+
+
+ggsave("Plots/DFE_hist_SN_IL3_Met.pdf", height = 4, width = 5)
+ggsave("Plots/DFE_hist_SN_IL3_Met.png", height = 4, width = 5)
+
+plot4 <- ggplot(met_scores %>% filter(mutation_type != "X" & mutation_type !="M" & mutation_type != "N")) +
+  geom_histogram(aes(x = IL3_withdrawal_score), binwidth = 0.5) +
+  xlab("Enrich2 score") + 
+  ylab("Density") + 
+  xlim(-10,10)+
+  geom_vline(xintercept = 0, linetype="dotted") +
+  theme_classic() + 
+  ggtitle("Synonymous IL3 Withdrawal")+
+  scale_color_manual(values=cbp1) +
+  labs(color = "Mutation type")
+
+plot5 <- ggplot(met_scores %>% filter(mutation_type != "X" & mutation_type != "S" & mutation_type != "N")) +
+  geom_histogram(aes(x = IL3_withdrawal_score), binwidth = 0.5 ) +
+  xlab("Enrich2 score") + 
+  ylab("Density") + 
+  xlim(-10,10)+
+  geom_vline(xintercept = 0, linetype="dotted") +
+  theme_classic() + 
+  ggtitle("Missense IL3 Withdrawal")+
+  scale_color_manual(values=cbp1) +
+  labs(color = "Mutation type")
+
+plot6 <- ggplot(met_scores %>% filter(mutation_type != "X" & mutation_type != "M" & mutation_type != "S")) +
+  geom_histogram(aes(x = IL3_withdrawal_score), bins = 5, binwidth = 0.5 ) +
+  xlab("Enrich2 score") + 
+  ylab("Density") + 
+  xlim(-10,10)+
+  geom_vline(xintercept = 0, linetype="dotted") +
+  theme_classic() + 
+  ggtitle("Nonsense IL3 Withdrawal")+
+  scale_color_manual(values=cbp1) +
+  labs(color = "Mutation type")
+
+plot_grid(plot1,plot4,plot2,plot5,plot3,plot6, ncol=2, nrow=3)
+
+ggsave("Plots/DFE_hist_SN_IL3_withdrawal_Met.pdf", height = 4, width = 5)
+ggsave("Plots/DFE_hist_SN_IL3_withdrawal_Met.png", height = 4, width = 5)
+
+```
+
+Plot DFEs: histograms, no mutants
+
+```{r}
+plot1 <- ggplot(ex14_scores %>% filter(mutation_type != "X" & mutation_type !="M" & mutation_type != "N")) +
+  geom_histogram(aes(x = IL3_score), binwidth = 0.5)+
+  xlab("Enrich2 score") + 
+  ylab("Density") + 
+  xlim(-10,10)+
+  geom_vline(xintercept = 0, linetype="dotted") +
+  theme_classic() + 
+  scale_color_manual(values=cbp1) +
+  ggtitle("Synonymous IL3")+
+  labs(color = "Mutation type")
+plot2 <- ggplot(ex14_scores %>% filter(mutation_type != "X" & mutation_type !="S" & mutation_type != "N")) +
+  geom_histogram(aes(x = IL3_score), binwidth = 0.5) +
+  xlab("Enrich2 score") + 
+  ylab("Density") + 
+  xlim(-10,10)+
+  geom_vline(xintercept = 0, linetype="dotted") +
+  theme_classic() + 
+  scale_color_manual(values=cbp1) +
+  ggtitle("Missense IL3")+
+  labs(color = "Mutation type")
+plot3 <- ggplot(ex14_scores %>% filter(mutation_type != "X" & mutation_type !="S" & mutation_type != "M")) +
+  geom_histogram(aes(x = IL3_score), binwidth = 0.5) +
+  xlab("Enrich2 score") + 
+  ylab("Density") + 
+  xlim(-10,10)+
+  geom_vline(xintercept = 0, linetype="dotted") +
+  theme_classic() + 
+  scale_color_manual(values=cbp1) +
+  ggtitle("Nonsense IL3")+
+  labs(color = "Mutation type")
+
+plot_grid(plot1,plot2,plot3, ncol=1, nrow=3)
+
+
+ggsave("Plots/DFE_hist_SN_IL3_ex14.pdf", height = 4, width = 5)
+ggsave("Plots/DFE_hist_SN_IL3_ex14.png", height = 4, width = 5)
+
+plot4 <- ggplot(ex14_scores %>% filter(mutation_type != "X" & mutation_type !="M" & mutation_type != "N")) +
+  geom_histogram(aes(x = IL3_withdrawal_score), binwidth = 0.5) +
+  xlab("Enrich2 score") + 
+  ylab("Density") + 
+  xlim(-10,10)+
+  geom_vline(xintercept = 0, linetype="dotted") +
+  theme_classic() + 
+  ggtitle("Synonymous IL3 Withdrawal")+
+  scale_color_manual(values=cbp1) +
+  labs(color = "Mutation type")
+
+plot5 <- ggplot(ex14_scores %>% filter(mutation_type != "X" & mutation_type != "S" & mutation_type != "N")) +
+  geom_histogram(aes(x = IL3_withdrawal_score), binwidth = 0.5 ) +
+  xlab("Enrich2 score") + 
+  ylab("Density") + 
+  xlim(-10,10)+
+  geom_vline(xintercept = 0, linetype="dotted") +
+  theme_classic() + 
+  ggtitle("Missense IL3 Withdrawal")+
+  scale_color_manual(values=cbp1) +
+  labs(color = "Mutation type")
+
+plot6 <- ggplot(ex14_scores %>% filter(mutation_type != "X" & mutation_type != "M" & mutation_type != "S")) +
+  geom_histogram(aes(x = IL3_withdrawal_score), bins = 5, binwidth = 0.5 ) +
+  xlab("Enrich2 score") + 
+  ylab("Density") + 
+  xlim(-10,10)+
+  geom_vline(xintercept = 0, linetype="dotted") +
+  theme_classic() + 
+  ggtitle("Nonsense IL3 Withdrawal")+
+  scale_color_manual(values=cbp1) +
+  labs(color = "Mutation type")
+
+plot_grid(plot1,plot4,plot2,plot5,plot3,plot6, ncol=2, nrow=3)
+
+ggsave("Plots/DFE_hist_SN_IL3_withdrawal_ex14.pdf", height = 4, width = 5)
+ggsave("Plots/DFE_hist_SN_IL3_withdrawal_ex14.png", height = 4, width = 5)
+
+```
+
+
+```{r}
+plot <- ggplot(met_scores %>% filter(mutation_type != "X")) +
+  geom_point(aes(x = IL3_score, y = IL3_withdrawal_score)) + 
+  xlab("IL3") + 
+  ylab("IL3 withdrawal") + 
+  coord_fixed(ratio = 1) +
+  theme_classic() 
+print(plot)
+
+ggsave("Plots/Met_IL3_vs_withdrawal.pdf", height = 4, width = 5)
+ggsave("Plots/Met_IL3_vs_withdrawal.png", height = 4, width = 5)
+
+```
+
+```{r}
+plot <- ggplot(ex14_scores %>% filter(mutation_type != "X")) +
+  geom_point(aes(x = IL3_score, y = IL3_withdrawal_score)) + 
+  xlab("IL3") + 
+  ylab("IL3 withdrawal") + 
+  coord_fixed(ratio = 1) +
+  theme_classic() 
+print(plot)
+
+ggsave("Plots/ex14_IL3_vs_withdrawal.pdf", height = 4, width = 5)
+ggsave("Plots/ex14_IL3_vs_withdrawal.png", height = 4, width = 5)
+```
+
+```{r}
+plot <- ggplot(ex14_scores %>% filter(mutation_type != "X")) +
+  geom_point(aes(x = IL3_score, y = IL3_withdrawal_score)) + 
+  xlab("IL3") + 
+  ylab("IL3 withdrawal") + 
+  coord_fixed(ratio = 1) +
+  theme_classic() 
+print(plot)
+
+ggsave("Plots/ex14_IL3_vs_withdrawal.pdf", height = 4, width = 5)
+ggsave("Plots/ex14_IL3_vs_withdrawal.png", height = 4, width = 5)
+```
+
+
+```{r}
+met_4XMO <- read.pdb("4XMO")
+
+x = map_scores_pdb(met_4XMO, met_avg_scores, "avg_IL3")
+write.pdb(x, file="4XMO_avg_IL3.pdb")
+x = map_scores_pdb(met_4XMO, met_avg_scores, "avg_IL3_withdrawal")
+write.pdb(x, file="4XMO_avg_IL3_withdrawal.pdb")
+# Write variance PDBs
+x = map_scores_pdb(met_4XMO, met_var_scores, "var_IL3")
+write.pdb(x, file="4XMO_var_IL3.pdb")
+x = map_scores_pdb(met_4XMO, met_var_scores, "var_IL3_withdrawal")
+write.pdb(x, file="4XMO_var_IL3_withdrawal.pdb")
+# Write max PDBs
+x = map_scores_pdb(met_4XMO, met_max_scores, "max_IL3")
+write.pdb(x, file="4XMO_max_IL3.pdb")
+x = map_scores_pdb(met_4XMO, met_max_scores, "max_IL3_withdrawal")
+write.pdb(x, file="4XMO_max_IL3_withdrawal.pdb")
+
+met_3R7O <- read.pdb("3R7O")
+x = map_scores_pdb(met_3R7O, met_avg_scores, "avg_IL3")
+write.pdb(x, file="3R7O_avg_IL3.pdb")
+x = map_scores_pdb(met_3R7O, met_avg_scores, "avg_IL3_withdrawal")
+write.pdb(x, file="met_3R7O_avg_IL3_withdrawal.pdb")
+# Write variance PDBs
+x = map_scores_pdb(met_3R7O, met_var_scores, "var_IL3")
+write.pdb(x, file="3R7O_var_IL3.pdb")
+x = map_scores_pdb(met_3R7O, met_var_scores, "var_IL3_withdrawal")
+write.pdb(x, file="met_3R7O_var_IL3_withdrawal.pdb")
+# Write max PDBs
+x = map_scores_pdb(met_3R7O, met_max_scores, "max_IL3")
+write.pdb(x, file="3R7O_max_IL3.pdb")
+x = map_scores_pdb(met_3R7O, met_max_scores, "max_IL3_withdrawal")
+write.pdb(x, file="met_3R7O_max_IL3_withdrawal.pdb")
+
+ex14_3R7O <- read.pdb("3R7O")
+x = map_scores_pdb(ex14_3R7O, ex14_avg_scores, "avg_IL3")
+write.pdb(x, file="3R7O_avg_IL3.pdb")
+x = map_scores_pdb(ex14_3R7O, ex14_avg_scores, "avg_IL3_withdrawal")
+write.pdb(x, file="ex14_3R7O_avg_IL3_withdrawal.pdb")
+# Write variance PDBs
+x = map_scores_pdb(ex14_3R7O, ex14_var_scores, "var_IL3")
+write.pdb(x, file="3R7O_var_IL3.pdb")
+x = map_scores_pdb(ex14_3R7O, ex14_var_scores, "var_IL3_withdrawal")
+write.pdb(x, file="ex14_3R7O_var_IL3_withdrawal.pdb")
+# Write max PDBs
+x = map_scores_pdb(ex14_3R7O, ex14_max_scores, "max_IL3")
+write.pdb(x, file="3R7O_max_IL3.pdb")
+x = map_scores_pdb(ex14_3R7O, ex14_max_scores, "max_IL3_withdrawal")
+write.pdb(x, file="ex14_3R7O_max_IL3_withdrawal.pdb")
+
+
+met_2G15 <- read.pdb("2G15")
+x = map_scores_pdb(met_2G15, met_avg_scores, "avg_IL3")
+write.pdb(x, file="2G15_avg_IL3.pdb")
+x = map_scores_pdb(met_2G15, met_avg_scores, "avg_IL3_withdrawal")
+write.pdb(x, file="met_2G15_avg_IL3_withdrawal.pdb")
+# Write variance PDBs
+x = map_scores_pdb(met_2G15, met_var_scores, "var_IL3")
+write.pdb(x, file="2G15_var_IL3.pdb")
+x = map_scores_pdb(met_2G15, met_var_scores, "var_IL3_withdrawal")
+write.pdb(x, file="met_2G15_var_IL3_withdrawal.pdb")
+# Write max PDBs
+x = map_scores_pdb(met_2G15, met_max_scores, "max_IL3")
+write.pdb(x, file="2G15_max_IL3.pdb")
+x = map_scores_pdb(met_2G15, met_max_scores, "max_IL3_withdrawal")
+write.pdb(x, file="met_2G15_max_IL3_withdrawal.pdb")
+
+ex14_2G15 <- read.pdb("2G15")
+x = map_scores_pdb(ex14_2G15, ex14_avg_scores, "avg_IL3")
+write.pdb(x, file="2G15_avg_IL3.pdb")
+x = map_scores_pdb(ex14_2G15, ex14_avg_scores, "avg_IL3_withdrawal")
+write.pdb(x, file="ex14_2G15_avg_IL3_withdrawal.pdb")
+# Write variance PDBs
+x = map_scores_pdb(ex14_2G15, ex14_var_scores, "var_IL3")
+write.pdb(x, file="2G15_var_IL3.pdb")
+x = map_scores_pdb(ex14_2G15, ex14_var_scores, "var_IL3_withdrawal")
+write.pdb(x, file="ex14_2G15_var_IL3_withdrawal.pdb")
+# Write max PDBs
+x = map_scores_pdb(ex14_2G15, ex14_max_scores, "max_IL3")
+write.pdb(x, file="2G15_max_IL3.pdb")
+x = map_scores_pdb(ex14_2G15, ex14_max_scores, "max_IL3_withdrawal")
+write.pdb(x, file="ex14_2G15_max_IL3_withdrawal.pdb")
+
+
+
+met_5HTI <- read.pdb("5HTI")
+x = map_scores_pdb(met_5HTI, met_avg_scores, "avg_IL3")
+write.pdb(x, file="5HTI_avg_IL3.pdb")
+x = map_scores_pdb(met_5HTI, met_avg_scores, "avg_IL3_withdrawal")
+write.pdb(x, file="met_5HTI_avg_IL3_withdrawal.pdb")
+# Write variance PDBs
+x = map_scores_pdb(met_5HTI, met_var_scores, "var_IL3")
+write.pdb(x, file="5HTI_var_IL3.pdb")
+x = map_scores_pdb(met_5HTI, met_var_scores, "var_IL3_withdrawal")
+write.pdb(x, file="met_5HTI_var_IL3_withdrawal.pdb")
+# Write max PDBs
+x = map_scores_pdb(met_5HTI, met_max_scores, "max_IL3")
+write.pdb(x, file="5HTI_max_IL3.pdb")
+x = map_scores_pdb(met_5HTI, met_max_scores, "max_IL3_withdrawal")
+write.pdb(x, file="met_5HTI_max_IL3_withdrawal.pdb")
+
+ex14_5HTI <- read.pdb("5HTI")
+x = map_scores_pdb(ex14_5HTI, ex14_avg_scores, "avg_IL3")
+write.pdb(x, file="5HTI_avg_IL3.pdb")
+x = map_scores_pdb(ex14_5HTI, ex14_avg_scores, "avg_IL3_withdrawal")
+write.pdb(x, file="ex14_5HTI_avg_IL3_withdrawal.pdb")
+# Write variance PDBs
+x = map_scores_pdb(ex14_5HTI, ex14_var_scores, "var_IL3")
+write.pdb(x, file="5HTI_var_IL3.pdb")
+x = map_scores_pdb(ex14_5HTI, ex14_var_scores, "var_IL3_withdrawal")
+write.pdb(x, file="ex14_5HTI_var_IL3_withdrawal.pdb")
+# Write max PDBs
+x = map_scores_pdb(ex14_5HTI, ex14_max_scores, "max_IL3")
+write.pdb(x, file="5HTI_max_IL3.pdb")
+x = map_scores_pdb(ex14_5HTI, ex14_max_scores, "max_IL3_withdrawal")
+write.pdb(x, file="ex14_5HTI_max_IL3_withdrawal.pdb")
+
+
+
+```
