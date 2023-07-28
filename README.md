@@ -1,4 +1,4 @@
-# MET_KinaseDomain_DMS
+# Deep Mutational Scan of the MET kinase domain 
 
 Source code and data for the analysis and figure generation in Estevam et al., 2023. 
 
