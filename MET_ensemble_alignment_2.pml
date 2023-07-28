@@ -1,12 +1,12 @@
 # MET_ensemble_alignment_2.pml
-# By G.Estevam
-# This is a program that opens MET kinase structures, aligns them to nlobe residues, measures their distance, and retrieves additional strcture info
+# By G.Estevam @UCSF
+# This code opens MET kinase structures, aligns them to nlobe residues, measures their distance, and retrieves additional strcture info
 
 #### pseudocode:
 # fetch all pdbs, align, and make them aesthstically pleasing
 # create a dictionary for each residue
 # interate state so that the residue coordinates for each state are saved in the dictionary for each structure/ object
-# run a loop that access the residues coordinate array, assigns each coordinate a variable, and does math to determine the distance between residues
+# run a loop that access the residues coordinate array, assigns each coordinate a variable, and calcualtes the distance between residues
 # grab additional structure details: resolution, ligand, resolved JM (based on defined residues)
 # append the structural information into a csv file (PDB, residue distances, resolution, ligand, resolved JM)
 
