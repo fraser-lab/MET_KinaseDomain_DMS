@@ -8,7 +8,7 @@ from matplotlib.ticker import PercentFormatter
 
 #csv_array=pd.read_csv("DFGin_MET_aligned_strutures.csv", sep=',', header=0)
 #csv_array=pd.read_csv("DFGin_MET_aligned_strutures.csv", sep=',', header=0)
-csv_array=pd.read_csv("MET_ensemblle_JM_C_helix_resi_dist.csv", sep=',', header=0)
+csv_array=pd.read_csv("MET_ensemble_JM_C_helix_resi_dist.csv", sep=',', header=0)
 
 '''
 dist_array0=csv_array["PDB"].to_numpy()
