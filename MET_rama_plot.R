@@ -1,7 +1,7 @@
 ##########################################################################
 # MET_rama_plot.R 
 # Code written by Gabriella Estevam @ UCSF
-# Plots the Beta-5 turn site that is equivalent to the MET P1153 proline lock position
+# Plots the Beta-5 turn site in Ramachandran space that is equivalent to the MET P1153 proline lock position
 # X and Y represent thie Phi and Psi angles of the specific positions - these values are hard coded
 # Contour data was obtained from  Lovell et al. 2003
 ##########################################################################
