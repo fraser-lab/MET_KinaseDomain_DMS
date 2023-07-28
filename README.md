@@ -1,10 +1,12 @@
 # MET kinase domain DMS
 
-Source code and data for the analysis and figure generation in Estevam et al., 2023. 
+Source code and data for the analysis and figure generation in (paper title) 
 
-Primary analysis of fitness scores, heatmaps, and PDB mapping can be found in: 
-  Met_V2.Rmd
-  MET_DMS_analysis_plots.R 
+Please cite: DOI
+
+  Primary analysis of fitness scores, heatmaps, and PDB mapping can be found in:
+  * Met_V2.Rmd
+  * MET_DMS_analysis_plots.R 
 
 ## Fitness scores 
   Wild type MET ICD scores: ex14_scores.csv  
