@@ -2,7 +2,7 @@
 # Code by: Gabriella Estevam @ UCSF
 #
 # analysis and plots of TPR-MET +/- Exon14 conditions
-# Utilizes "dms_analysis_utilities.R" and "MET_V2.RMD" code and outputs written by Christian MacDonald @ UCSF 
+# Utilizes "dms_analysis_utilities.R" and "MET_V2.RMD" code and outputs written by Christian Macdonald @ UCSF 
 #
 # the goal of this code is to  analyze each experiment, compare the two conditions,
 # and define statistical thresholds for comparison 
