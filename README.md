@@ -8,4 +8,4 @@ Source code and data for the analysis and figure generation in Estevam et al., 2
 
 ## Fitness scores 
   Wild type MET ICD scores: ex14_scores.csv  
-  Exon14 skipped MET ICD scores: met_scores.csv 
+  Exon 14 skipped MET ICD scores: met_scores.csv 
