@@ -6,7 +6,8 @@ doi: https://doi.org/10.1101/2023.08.03.551866
 
   Primary analysis of fitness scores, heatmaps, and PDB mapping can be found in:
   * Met_V2.Rmd
-  * MET_DMS_analysis_plots.R 
+  * MET_DMS_analysis_plots.R
+  * dms_analysis_utilities.R 
 
 ## Fitness scores 
   Wild type MET ICD scores: ex14_scores.csv  
